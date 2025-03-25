@@ -1,0 +1,14 @@
+#!/usr/bin/env python
+import tensorshield.ext.validator
+
+
+class Validator(tensorshield.ext.validator.Validator):
+    __module__: str = '{{ app_name }}.app'
+
+    async def configure(self, reloading: bool = False):
+        """Setup the internal state of the Neuron. If `reloading`
+        is ``True``, then the main event loop is running and the
+        configuration was triggered by an interrupt signal or user
+        defined condition.
+        """
+        await super().configure(reloading=reloading)

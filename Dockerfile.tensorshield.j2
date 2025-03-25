@@ -1,0 +1,64 @@
+ARG BASE_IMAGE={{ docker_base_image }}
+ARG BT_NETWORK=finney
+ARG BT_SUBNET_UID=0
+
+FROM ${BASE_IMAGE} AS base
+  USER 0
+  ENV PATH="/root/.cargo/bin:${PATH}"
+  ENV PIP_CACHE_DIR=.cache/pip
+
+  # Build requirements
+  RUN apt update && apt install -y\
+    build-essential\
+    git\
+    curl\
+    libssl-dev\
+    pkg-config\
+    wget
+
+  # Install requirements
+  WORKDIR /tmp
+  RUN mkdir lib
+  COPY requirements.txt .
+  RUN --mount=type=cache,target=.cache/pip pip install \
+    -t ./lib -r requirements.txt
+
+
+FROM ${BASE_IMAGE} as runtime
+  USER 0 
+  COPY --from=base /tmp/lib /usr/local/lib/{{ app_name }}
+  COPY ./ /usr/local/src/{{ app_name }}
+  RUN mkdir -p /var/lib/{{ app_name }}
+  RUN chown 1000:1000 /var/lib/{{ app_name }}
+  RUN groupadd {{ app_name }} -g 1000
+  RUN useradd {{ app_name }} --uid 1000 --gid 1000 -d /var/lib/{{ app_name }}
+  RUN chmod +x /usr/local/src/{{ app_name }}/bin/*
+  RUN cp /usr/local/src/{{ app_name }}/bin/* /usr/local/bin/
+
+  USER {{ app_name }}
+  ENV BT_NETWORK=${BT_NETWORK}
+  ENV BT_SUBNET_UID=${BT_SUBNET_UID}
+  ENV BT_WALLET_PATH=/var/run/secrets/bittensor
+  ENV HF_HOME=/var/lib/{{ app_name }}/.huggingface
+  ENV PYTHONPATH=/usr/local/lib/{{ app_name }}:/usr/local/src/{{ app_name }}:/usr/local/src/{{ app_name }}
+  ENV USE_TORCH=0
+  ENV VARDIR=/var/lib/{{ app_name }}
+  ENV WANDB_API_KEY=changeme
+  ENV WANDB_DIR=/tmp
+  ENTRYPOINT ["python"]
+
+
+FROM runtime AS cli
+  ENTRYPOINT ["/usr/local/bin/{{ app_name }}"]
+
+
+FROM runtime AS miner
+  ENV BT_AXON_DISABLED=false
+  ENV BT_ENABLED_HOTKEYS=all
+  ENTRYPOINT ["/usr/local/bin/{{ app_name }}", "run", "miner"]
+
+
+FROM runtime AS validator
+  ENV BT_AXON_DISABLED=true
+  ENV BT_ENABLED_HOTKEYS=all
+  ENTRYPOINT ["/usr/local/bin/{{ app_name }}", "run", "validator"]

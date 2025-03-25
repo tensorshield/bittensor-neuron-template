@@ -1,0 +1,3 @@
+tensorshield.ext.miner>=0.0.3
+tensorshield.ext.validator>=0.0.3
+typer

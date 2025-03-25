@@ -1,0 +1,66 @@
+from typing import Annotated
+
+from typer import Typer
+from typer import Option
+
+from {{ app_name }}.app.miner import Miner
+from {{ app_name }}.app.validator import Validator
+
+
+subparser = Typer()
+
+
+@subparser.callback(invoke_without_command=True)
+def run(
+    kind: str,
+    network: Annotated[str | None, Option('--subtensor.network')] = None,
+    chain_endpoint: Annotated[str | None, Option('--subtensor.chain_endpoint')] = None,
+    netuid: Annotated[int | None, Option('--netuid')] = None,
+    axon_ip: Annotated[str | None, Option('--axon.ip')] = None,
+    axon_port: Annotated[int | None, Option('--axon.port')] = None,
+    axon_off: Annotated[bool, Option('--axon.off')] = False,
+    wallet_path: Annotated[str | None, Option('--wallet.path')] = None,
+) -> None:
+    match kind:
+        case 'miner': cls = Miner
+        case 'validator':
+            # Most validators do not run an axon so have it default to
+            # True.
+            if axon_off is None: # type: ignore
+                axon_off = True
+            cls = Validator
+        case _:
+            raise NotImplementedError
+    return _run(
+        cls,
+        network=network,
+        chain_endpoint=chain_endpoint,
+        netuid=netuid,
+        axon_ip=axon_ip,
+        axon_port=axon_port,
+        axon_off=axon_off,
+        wallet_path=wallet_path
+    )
+
+
+def _run(
+    cls: type[Validator] | type[Miner],
+    network: str | None,
+    chain_endpoint: str | None,
+    netuid: int | None,
+    axon_ip: str | None,
+    axon_port: int | None,
+    axon_off: bool,
+    wallet_path: str | None,
+):
+    neuron = cls.fromenv(
+        name='{{ app_name }}',
+        BT_AXON_HOST=axon_ip,
+        BT_AXON_PORT=axon_port,
+        BT_AXON_DISABLED=axon_off,
+        BT_NETWORK=network,
+        BT_SUBNET_UID=netuid,
+        BT_CHAIN_ENDPOINT=chain_endpoint,
+        BT_WALLET_PATH=wallet_path,
+    )
+    neuron.main()
